@@ -14,107 +14,146 @@ import Header from './components/Header'
 import Footer from './components/Footer'
 import { MaterialCommunityIcons } from '@expo/vector-icons'
 import { AntDesign } from '@expo/vector-icons'
+import * as firebase from 'firebase'
 
-export default function App() {
-  const [taskList, setTaskList] = useState([])
-  const [isAddMode, setAddMode] = useState(false)
-  const [shouldShow, setShouldShow] = useState(true)
+const firebaseConfig = {
+  apiKey: "",
+  authDomain: "",
+  databaseURL: "",
+  projectId: "",
+  storageBucket: "",
+  messagingSenderId: "",
+  appId: "",
+  measurementId: ""
+}
 
-  const addTask = (taskTitle) => {
-    setTaskList((currentTasks) => [
-      ...currentTasks,
-      { id: Math.random().toString(), value: taskTitle },
-    ])
-    setAddMode(false)
+const firebaseApp =  firebase.initializeApp(firebaseConfig);
+let firbaseDb = firebaseApp.database();
+
+export default class App extends React.Component {
+  constructor(props) {
+    super(props)
+    this.state = {
+      taskList: [],
+      isAddMode: false,
+      shouldShow: true,
+    }
   }
 
-  const removeHandler = (goalId) => {
-    setTaskList((currentTasks) => {
-      return currentTasks.filter((goal) => goal.id !== goalId)
-    })
+  componentDidMount(){
+    // start listening for firebase updates
+    this.listenForTasks();
   }
 
-  const cancelAddHandler = () => {
-    setAddMode(false)
+  listenForTasks() {
+    firbaseDb.ref('todos').on('value', (dataSnapshot) => {
+      var tasks = [];
+      dataSnapshot.forEach((child) => {
+        tasks.push({
+          id: child.val().id,
+          value: child.val().value,
+          _key: child.key
+        });
+      });
+  
+      this.setState({
+        taskList: tasks
+      });
+    });
   }
 
-  return (
-    <View
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'stretch',
-      }}
-    >
-      <Header />
-      <ScrollView style={styles.screen}>
-        <GoalInput
-          visible={isAddMode}
-          onAddTask={addTask}
-          onCancel={cancelAddHandler}
-        />
-        <FlatList
-          data={taskList}
-          renderItem={(itemData) => (
-            <GoalItem
-              id={itemData.item.id}
-              onDelete={removeHandler}
-              title={itemData.item.value}
-            />
-          )}
-        />
-        <TouchableHighlight
-          onPress={() => setAddMode(true)}
-          style={styles.button}
-          activeOpacity={0.6}
-          underlayColor={'#30C4C9'}
-        >
-          <AntDesign name="plussquareo" size={64} color="#3B828F" />
-        </TouchableHighlight>
-        {shouldShow ? (
-          <View style={styles.tipsContainer}>
-            <DoubleClick doubleTap={() => setShouldShow(!shouldShow)}>
-              <View style={styles.tips}>
-                <Text style={styles.tipList}>
-                  <AntDesign name="infocirlceo" size={24} color="black" /> Tips
-                </Text>
-                <Text style={styles.tip}>
-                  Press the cross{' '}
-                  <AntDesign name="plussquareo" size={24} color="black" />{' '}
-                  button above to add new tasks
-                </Text>
-                <Text style={styles.tip}>
-                  Tap on task to complete{' '}
-                  <MaterialCommunityIcons
-                    name="gesture-tap"
-                    size={24}
-                    color="black"
-                  />
-                </Text>
-                <Text style={styles.tip}>
-                  Long press to delete task{' '}
-                  <MaterialCommunityIcons
-                    name="gesture-tap-hold"
-                    size={24}
-                    color="black"
-                  />
-                </Text>
-                <Text style={styles.tip}>
-                  Double tap to hide tips{' '}
-                  <MaterialCommunityIcons
-                    name="gesture-double-tap"
-                    size={24}
-                    color="black"
-                  />
-                </Text>
-              </View>
-            </DoubleClick>
-          </View>
-        ) : null}
-      </ScrollView>
-      <Footer />
-    </View>
-  )
+  addTask(taskTitle) {
+    firbaseDb.ref('todos').push({ id: Math.random().toString(), value: taskTitle })
+    this.cancelAddHandler()
+  }
+
+  removeHandler(goalKey) {
+    firbaseDb.ref('todos/' + goalKey).remove()
+  }
+
+  cancelAddHandler() {
+    this.setState({ isAddMode: false })
+  }
+
+  render() {
+    return (
+      <View
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'stretch',
+        }}
+      >
+        <Header />
+        <ScrollView style={styles.screen}>
+          <GoalInput
+            visible={this.state.isAddMode}
+            onAddTask={(taskTitle) => {this.addTask(taskTitle)}}
+            onCancel={() => this.cancelAddHandler}
+          />
+          <FlatList
+            data={this.state.taskList}
+            renderItem={(itemData) => (
+              <GoalItem
+                id={itemData.item._key}
+                onDelete={this.removeHandler}
+                title={itemData.item.value}
+              />
+            )}
+          />
+          <TouchableHighlight
+            onPress={() => this.setState({ isAddMode: true })}
+            style={styles.button}
+            activeOpacity={0.6}
+            underlayColor={'#30C4C9'}
+          >
+            <AntDesign name="plussquareo" size={64} color="#3B828F" />
+          </TouchableHighlight>
+          {this.state.shouldShow ? (
+            <View style={styles.tipsContainer}>
+              <DoubleClick doubleTap={() => this.setState({ shouldShow: !this.state.shouldShow })}>
+                <View style={styles.tips}>
+                  <Text style={styles.tipList}>
+                    <AntDesign name="infocirlceo" size={24} color="black" /> Tips
+                  </Text>
+                  <Text style={styles.tip}>
+                    Press the cross{' '}
+                    <AntDesign name="plussquareo" size={24} color="black" />{' '}
+                    button above to add new tasks
+                  </Text>
+                  <Text style={styles.tip}>
+                    Tap on task to complete{' '}
+                    <MaterialCommunityIcons
+                      name="gesture-tap"
+                      size={24}
+                      color="black"
+                    />
+                  </Text>
+                  <Text style={styles.tip}>
+                    Long press to delete task{' '}
+                    <MaterialCommunityIcons
+                      name="gesture-tap-hold"
+                      size={24}
+                      color="black"
+                    />
+                  </Text>
+                  <Text style={styles.tip}>
+                    Double tap to hide tips{' '}
+                    <MaterialCommunityIcons
+                      name="gesture-double-tap"
+                      size={24}
+                      color="black"
+                    />
+                  </Text>
+                </View>
+              </DoubleClick>
+            </View>
+          ) : null}
+        </ScrollView>
+        <Footer />
+      </View>
+    )
+  }
 }
 
 const styles = StyleSheet.create({
